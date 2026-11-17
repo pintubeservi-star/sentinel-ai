@@ -137,6 +137,7 @@ private fun SentinelScreen(onAnalyze: (Uri) -> ApkReport) {
                         Text(if (showAgentChat) "Ocultar agente conversacional" else "Abrir agente conversacional")
                     }
                 }
+                item { AgentControlPanel() }
                 if (showAgentChat) item { AgentChatPanel() }
                 item {
                     Card {
