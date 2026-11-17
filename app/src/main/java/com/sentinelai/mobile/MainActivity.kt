@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import java.io.File
@@ -93,10 +94,14 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun SentinelScreen(onAnalyze: (Uri) -> ApkReport) {
+    val context = LocalContext.current
     var report by remember { mutableStateOf<ApkReport?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var showSensitive by remember { mutableStateOf(false) }
+    var gateDialog by remember { mutableStateOf(false) }
+    var enteredPin by remember { mutableStateOf("") }
+    var gateError by remember { mutableStateOf<String?>(null) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             busy = true
@@ -153,8 +158,8 @@ private fun SentinelScreen(onAnalyze: (Uri) -> ApkReport) {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text("Búsqueda profunda / datos sensibles", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                 Text("${result.sensitiveFindings.size} hallazgo(s) potencialmente sensibles. Los valores de credenciales nunca se muestran; solo el tipo y la ubicación.")
-                                Button(onClick = { showSensitive = !showSensitive }, modifier = Modifier.fillMaxWidth()) {
-                                    Text(if (showSensitive) "Ocultar hallazgos" else "Mostrar hallazgos sensibles")
+                                Button(onClick = { gateDialog = true; enteredPin = ""; gateError = null }, modifier = Modifier.fillMaxWidth()) {
+                                    Text(if (showSensitive) "Volver a validar acceso" else "Acceder con contraseña")
                                 }
                             }
                         }
@@ -172,6 +177,29 @@ private fun SentinelScreen(onAnalyze: (Uri) -> ApkReport) {
                     Text("Alcance actual: análisis estático local de APK y búsqueda de patrones en recursos de texto. No inspecciona datos privados en tiempo de ejecución, no prueba APIs/servidores y no explota vulnerabilidades. Los hallazgos son indicios que requieren validación autorizada.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
+        }
+        if (gateDialog) {
+            val configured = LocalSensitiveGate.isConfigured(context)
+            AlertDialog(
+                onDismissRequest = { gateDialog = false },
+                title = { Text(if (configured) "Acceso protegido" else "Configurar contraseña privada") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(if (configured) "Introduce tu contraseña para consultar los hallazgos sensibles." else "Crea la contraseña que protegerá esta sección en este dispositivo. No se guarda en texto ni se incluye en el código.")
+                        OutlinedTextField(value = enteredPin, onValueChange = { enteredPin = it; gateError = null }, label = { Text("Contraseña") }, singleLine = true)
+                        if (gateError != null) Text(gateError!!, color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        val ok = if (configured) LocalSensitiveGate.verify(context, enteredPin)
+                            else LocalSensitiveGate.setPin(context, enteredPin)
+                        if (ok) { showSensitive = true; gateDialog = false; enteredPin = "" }
+                        else gateError = if (configured) "Contraseña incorrecta." else "Usa al menos 6 caracteres alfanuméricos."
+                    }) { Text(if (configured) "Desbloquear" else "Guardar contraseña") }
+                },
+                dismissButton = { TextButton(onClick = { gateDialog = false }) { Text("Cancelar") } }
+            )
         }
     }
 }
