@@ -14,11 +14,11 @@ object SafeWebAudit {
     fun audit(input: String): WebAuditReport {
         val uri = runCatching { URI(input.trim()) }.getOrElse { error("Introduce una URL válida, por ejemplo https://tu-dominio.com") }
         require(uri.scheme.equals("https", true)) { "Solo se permiten objetivos HTTPS." }
-        require(uri.userInfo == null && uri.query == null && uri.fragment == null) { "Introduce solo el dominio HTTPS, sin credenciales, parámetros ni fragmentos." }
+        require(uri.userInfo == null && uri.query == null && uri.fragment == null && (uri.path.isNullOrBlank() || uri.path == "/")) { "Introduce solo el dominio HTTPS, sin credenciales, parámetros ni fragmentos." }
         val host = uri.host ?: error("No se reconoce el dominio.")
         require(!host.equals("localhost", true) && !host.endsWith(".local", true)) { "No se permiten destinos locales." }
         val addresses = InetAddress.getAllByName(host)
-        require(addresses.isNotEmpty() && addresses.all { it.isAnyLocalAddress || it.isLoopbackAddress || it.isLinkLocalAddress || it.isSiteLocalAddress || it.isMulticastAddress }.not()) {
+        require(addresses.isNotEmpty() && addresses.all { !(it.isAnyLocalAddress || it.isLoopbackAddress || it.isLinkLocalAddress || it.isSiteLocalAddress || it.isMulticastAddress) }) {
             "El dominio resuelve a una dirección privada o local; auditoría bloqueada."
         }
         val connection = (uri.toURL().openConnection() as HttpsURLConnection).apply {
