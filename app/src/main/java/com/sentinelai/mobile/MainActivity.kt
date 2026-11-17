@@ -107,6 +107,7 @@ private fun SentinelScreen(onAnalyze: (Uri) -> ApkReport) {
     var webBusy by remember { mutableStateOf(false) }
     var webError by remember { mutableStateOf<String?>(null) }
     var webReport by remember { mutableStateOf<WebAuditReport?>(null) }
+    var showAgentChat by remember { mutableStateOf(true) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             busy = true
@@ -131,6 +132,12 @@ private fun SentinelScreen(onAnalyze: (Uri) -> ApkReport) {
                     Text("Mobile Security Lab", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                     Text("Auditoría estática profunda de APK", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+                item {
+                    OutlinedButton(onClick = { showAgentChat = !showAgentChat }, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (showAgentChat) "Ocultar agente conversacional" else "Abrir agente conversacional")
+                    }
+                }
+                if (showAgentChat) item { AgentChatPanel() }
                 item {
                     Card {
                         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
