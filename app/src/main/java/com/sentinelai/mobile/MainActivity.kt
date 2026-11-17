@@ -102,6 +102,11 @@ private fun SentinelScreen(onAnalyze: (Uri) -> ApkReport) {
     var gateDialog by remember { mutableStateOf(false) }
     var enteredPin by remember { mutableStateOf("") }
     var gateError by remember { mutableStateOf<String?>(null) }
+    var auditUrl by remember { mutableStateOf("https://") }
+    var authorized by remember { mutableStateOf(false) }
+    var webBusy by remember { mutableStateOf(false) }
+    var webError by remember { mutableStateOf<String?>(null) }
+    var webReport by remember { mutableStateOf<WebAuditReport?>(null) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             busy = true
@@ -130,7 +135,7 @@ private fun SentinelScreen(onAnalyze: (Uri) -> ApkReport) {
                     Card {
                         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text("Análisis de APK", style = MaterialTheme.typography.titleLarge)
-                            Text("Inspecciona recursos empaquetados, patrones de credenciales, hosts, tráfico HTTP, permisos y componentes Android. El análisis se procesa localmente.")
+                            Text("Inspecciona recursos y cadenas de código DEX, patrones de credenciales, hosts, tráfico HTTP, permisos y componentes Android.")
                             Button(onClick = { picker.launch(arrayOf("application/vnd.android.package-archive", "application/octet-stream")) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                                 Text(if (busy) "Analizando…" else "Seleccionar APK")
                             }
@@ -138,6 +143,39 @@ private fun SentinelScreen(onAnalyze: (Uri) -> ApkReport) {
                     }
                 }
                 if (error != null) item { Text(error!!, color = MaterialTheme.colorScheme.error) }
+                item {
+                    Card {
+                        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("Auditoría HTTPS de dominio", style = MaterialTheme.typography.titleLarge)
+                            Text("Realiza una única solicitud GET de bajo impacto para revisar TLS y cabeceras HTTP. No rastrea rutas, no intenta iniciar sesión ni explota servicios.")
+                            OutlinedTextField(value = auditUrl, onValueChange = { auditUrl = it }, label = { Text("Dominio HTTPS propio") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                                Checkbox(checked = authorized, onCheckedChange = { authorized = it })
+                                Text("Confirmo que tengo autorización para revisar este dominio.")
+                            }
+                            Button(
+                                onClick = {
+                                    webBusy = true
+                                    webError = null
+                                    webReport = null
+                                    Thread {
+                                        val result = runCatching { SafeWebAudit.audit(auditUrl) }
+                                        webReport = result.getOrNull()
+                                        webError = result.exceptionOrNull()?.message
+                                        webBusy = false
+                                    }.start()
+                                },
+                                enabled = authorized && !webBusy && auditUrl.startsWith("https://", true),
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text(if (webBusy) "Revisando…" else "Ejecutar revisión HTTPS") }
+                            if (webError != null) Text(webError!!, color = MaterialTheme.colorScheme.error)
+                            webReport?.let { result ->
+                                Text("Resultado: ${result.status} · ${result.host}", fontWeight = FontWeight.Bold)
+                                result.findings.forEach { FindingCard(it) }
+                            }
+                        }
+                    }
+                }
                 report?.let { result ->
                     item {
                         Card {
@@ -174,7 +212,7 @@ private fun SentinelScreen(onAnalyze: (Uri) -> ApkReport) {
                     }
                 }
                 item {
-                    Text("Alcance actual: análisis estático local de APK y búsqueda de patrones en recursos de texto. No inspecciona datos privados en tiempo de ejecución, no prueba APIs/servidores y no explota vulnerabilidades. Los hallazgos son indicios que requieren validación autorizada.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Alcance: análisis estático local de APK/DEX y revisión HTTPS inicial de un dominio autorizado. No inspecciona datos privados en tiempo de ejecución, no prueba autenticación ni vulnerabilidades de lógica de negocio y no explota sistemas. Los hallazgos requieren validación profesional.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
